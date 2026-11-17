@@ -33,6 +33,7 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from email.message import EmailMessage
+from html import escape
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -56,6 +57,8 @@ PAGE_URL = (
     "https://www.philibertnet.com/fr/212-pokemon"
     "#e210/mobile/m=and&q=pok%C3%A9mon+30+ans"
 )
+DEFAULT_GITHUB_REPO = "MathGpn/vinted-nba"
+DISPATCH_EVENT = "philibert-alert"
 
 # Disponibilités clairement achetables / non achetables côté index Doofinder.
 PURCHASABLE_STATUSES = {
@@ -347,7 +350,7 @@ def format_product_line(product: Product, reason: str | None = None) -> str:
     )
 
 
-def build_email(alerts: list[tuple[str, Product]], query: str) -> tuple[str, str]:
+def build_email(alerts: list[tuple[str, Product]], query: str) -> tuple[str, str, str]:
     n = len(alerts)
     if n == 1:
         reason, product = alerts[0]
@@ -365,7 +368,28 @@ def build_email(alerts: list[tuple[str, Product]], query: str) -> tuple[str, str
         lines.append(format_product_line(product, reason))
         lines.append("")
     lines.append("— script watch_philibert.py")
-    return subject, "\n".join(lines)
+    body = "\n".join(lines)
+
+    items_html: list[str] = []
+    for reason, product in alerts:
+        preorder = " (précommande)" if product.preorder and product.purchasable else ""
+        url = escape(product.url, quote=True)
+        items_html.append(
+            "<li>"
+            f"<strong>[{escape(reason)}]</strong> "
+            f'<a href="{url}">{escape(product.name)}</a>{escape(preorder)}<br>'
+            f"{escape(status_label(product))} — {escape(product.price_label())}"
+            "</li>"
+        )
+    body_html = (
+        "<p>Surveillance Philibert — requête « "
+        f"{escape(query)} ».</p>"
+        f"<p>Page : <a href=\"{escape(PAGE_URL, quote=True)}\">Pokémon 30 ans sur Philibert</a></p>"
+        f"<p>Détecté à {escape(now_local().strftime('%d/%m/%Y %H:%M:%S'))} (Europe/Paris).</p>"
+        f"<ul>{''.join(items_html)}</ul>"
+        "<p>— script watch_philibert.py</p>"
+    )
+    return subject, body, body_html
 
 
 def gmail_credentials() -> tuple[str, str, str]:
@@ -386,13 +410,37 @@ def gmail_credentials() -> tuple[str, str, str]:
     return address, password, mail_to
 
 
-def send_gmail(subject: str, body: str) -> None:
+def github_token() -> str:
+    return (os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or "").strip()
+
+
+def resolve_notifier() -> str:
+    """smtp | github. Défaut : github si un jeton est présent, sinon smtp."""
+    explicit = (os.environ.get("NOTIFY") or "").strip().lower()
+    if explicit in {"smtp", "github"}:
+        return explicit
+    if github_token():
+        return "github"
+    if (os.environ.get("GMAIL_ADDRESS") or "").strip() and (
+        os.environ.get("GMAIL_APP_PASSWORD") or ""
+    ).strip():
+        return "smtp"
+    raise RuntimeError(
+        "Aucun notificateur disponible. Définis NOTIFY=github avec GH_TOKEN "
+        "(ou GITHUB_TOKEN), ou NOTIFY=smtp avec GMAIL_ADDRESS et "
+        "GMAIL_APP_PASSWORD. Voir .env.example."
+    )
+
+
+def send_gmail(subject: str, body: str, body_html: str | None = None) -> None:
     address, password, mail_to = gmail_credentials()
     message = EmailMessage()
     message["From"] = address
     message["To"] = mail_to
     message["Subject"] = subject
     message.set_content(body)
+    if body_html and body_html.strip():
+        message.add_alternative(body_html, subtype="html")
     context = ssl.create_default_context()
     with smtplib.SMTP("smtp.gmail.com", 587, timeout=30) as smtp:
         smtp.ehlo()
@@ -401,6 +449,64 @@ def send_gmail(subject: str, body: str) -> None:
         smtp.login(address, password)
         smtp.send_message(message)
     logger.info("E-mail envoyé à %s : %s", mail_to, subject)
+
+
+def send_github_dispatch(subject: str, body: str, body_html: str | None = None) -> None:
+    token = github_token()
+    if not token:
+        raise RuntimeError(
+            "Jeton GitHub manquant (GH_TOKEN ou GITHUB_TOKEN) pour NOTIFY=github."
+        )
+    repo = (os.environ.get("GITHUB_REPO") or DEFAULT_GITHUB_REPO).strip()
+    payload = {
+        "event_type": DISPATCH_EVENT,
+        "client_payload": {
+            "subject": subject,
+            "body": body,
+            "body_html": body_html or "",
+        },
+    }
+    url = f"https://api.github.com/repos/{repo}/dispatches"
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=data,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "watch-philibert",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            status = response.status
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:400]
+        raise RuntimeError(
+            f"Échec du repository_dispatch GitHub (HTTP {exc.code}) : {detail}"
+        ) from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"Erreur réseau vers l'API GitHub : {exc.reason}") from exc
+    if status not in {204, 200}:
+        raise RuntimeError(f"repository_dispatch GitHub : statut inattendu HTTP {status}")
+    logger.info(
+        "Alerte transmise au workflow GitHub %s (%s) : %s",
+        repo,
+        DISPATCH_EVENT,
+        subject,
+    )
+
+
+def send_alert(subject: str, body: str, body_html: str | None = None) -> None:
+    notifier = resolve_notifier()
+    logger.info("Envoi de l'alerte via %s.", notifier)
+    if notifier == "github":
+        send_github_dispatch(subject, body, body_html)
+    else:
+        send_gmail(subject, body, body_html)
 
 
 def next_sleep(interval: int, backoff: float) -> float:
@@ -445,10 +551,10 @@ def run_once(
         logger.info("Aucun nouvel article achetable depuis la dernière passe.")
 
     if alerts and not args.dry_run:
-        subject, body = build_email(alerts, args.query)
-        send_gmail(subject, body)
+        subject, body, body_html = build_email(alerts, args.query)
+        send_alert(subject, body, body_html)
     elif alerts and args.dry_run:
-        logger.info("Mode --dry-run : e-mail non envoyé.")
+        logger.info("Mode --dry-run : alerte non envoyée.")
 
     save_state(args.state_file, args.query, products, state)
     return products, alerts, first_run
@@ -469,7 +575,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--test-email",
         action="store_true",
-        help="Envoie un e-mail de test via Gmail puis quitte (sans interroger Philibert).",
+        help="Envoie une alerte de test via le notificateur actif (smtp ou github) puis quitte.",
     )
     parser.add_argument(
         "--alert-on-first-run",
@@ -479,7 +585,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Détecte les alertes mais n'envoie aucun e-mail.",
+        help="Détecte les alertes mais n'envoie aucune notification.",
     )
     parser.add_argument(
         "--interval",
@@ -540,14 +646,21 @@ def main(argv: list[str] | None = None) -> int:
             handler.formatter.converter = _local_converter
 
     if args.test_email:
+        when = now_local().strftime("%d/%m/%Y %H:%M:%S")
         subject = "[Philibert] Test de l'alerte e-mail"
         body = (
             "Ceci est un e-mail de test envoyé par watch_philibert.py.\n"
-            f"Envoyé à {now_local().strftime('%d/%m/%Y %H:%M:%S')} (Europe/Paris).\n"
+            f"Envoyé à {when} (Europe/Paris).\n"
             f"Page surveillée : {PAGE_URL}\n"
         )
+        body_html = (
+            "<p>Ceci est un e-mail de test envoyé par <code>watch_philibert.py</code>.</p>"
+            f"<p>Envoyé à {escape(when)} (Europe/Paris).</p>"
+            f'<p>Page surveillée : <a href="{escape(PAGE_URL, quote=True)}">'
+            "Pokémon 30 ans sur Philibert</a></p>"
+        )
         try:
-            send_gmail(subject, body)
+            send_alert(subject, body, body_html)
         except RuntimeError as exc:
             logger.error("%s", exc)
             return 1
