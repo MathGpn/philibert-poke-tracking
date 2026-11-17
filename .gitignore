@@ -4,5 +4,6 @@ __pycache__/
 venv/
 .env
 seen_items.json
+seen_products.json
 *.log
 .DS_Store

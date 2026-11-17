@@ -1,110 +1,116 @@
 # vinted-nba
 
-Outils pour surveiller Vinted à la recherche de cartes NBA.
+Surveillance simple de Philibert pour les articles **Pokémon 30 ans**.
 
-## Surveillance Kyrie Irving rookie Prizm
+## Surveillance Philibert — Pokémon 30 ans
 
-`watch_irving_prizm.py` interroge le catalogue Vinted (par défaut [vinted.fr](https://www.vinted.fr)) toutes les **10 minutes**, cherche une carte **Kyrie Irving rookie Panini Prizm**, et n'affiche que les **nouvelles** annonces.
+`watch_philibert.py` interroge, le plus souvent possible (toutes les **90 secondes** par défaut), la recherche équivalente à la page :
+
+[Pokémon 30 ans sur Philibert](https://www.philibertnet.com/fr/212-pokemon#e210/mobile/m=and&q=pok%C3%A9mon+30+ans)
+
+Dès qu'un **nouvel article devient disponible à l'achat**, ou qu'un article déjà connu (indisponible / à venir) passe à l'achat, un **e-mail Gmail** est envoyé.
 
 Le script :
 
-- ouvre une session anonyme en visitant la page d'accueil (comme un navigateur) ;
-- interroge l'API catalogue actuelle, `https://api.vinted.fr/svc-catalogue/items` ;
-- lance plusieurs recherches (`kyrie irving prizm rookie`, `irving prizm 2012`, etc.) ;
-- ne retient que les titres qui mentionnent Irving/Kyrie **et** Prizm, plus un indice rookie (`rookie`, `RC`, `2012`, `2012-13`) ;
-- ignore notamment les cartes de Bucky Irving (NFL) ;
-- mémorise les ids déjà vus dans `seen_items.json` ;
-- peut envoyer une notification (ntfy ou Telegram) si tu configures des variables d'environnement — rien n'est envoyé sinon.
+- passe par l'API de recherche publique Doofinder utilisée par le calque de la page (le fragment `#e210/mobile/m=and&q=…` n'est pas envoyé au serveur : c'est un filtre côté navigateur) ;
+- mémorise les articles déjà vus dans `seen_products.json` ;
+- n'envoie **aucune alerte** lors de la première exécution (baseline), sauf si tu passes `--alert-on-first-run` ;
+- traite une précommande **ouverte** (ajout au panier possible) comme achetable, en la labellisant clairement ; une fiche « à venir » encore indisponible est seulement mémorisée.
 
-La date affichée est l'heure de **première détection** (fuseau Europe/Paris). L'API catalogue ne renvoie pas la date de mise en ligne exacte.
+L'heure affichée est celle de la détection, fuseau **Europe/Paris**.
 
 ### Installation
 
+Aucune dépendance tierce : Python 3.10+ suffit (bibliothèque standard uniquement).
+
 ```bash
+# optionnel, pour isoler l'environnement
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
 ```
 
-### Lancer une fois (test)
+### Configurer l'e-mail Gmail
+
+Google bloque les mots de passe de compte habituels pour les applications. Il faut un **mot de passe d'application**.
+
+1. Active la [validation en deux étapes](https://myaccount.google.com/signinoptions/two-step-verification) sur le compte Gmail qui enverra les alertes.
+2. Ouvre [Mots de passe des applications](https://myaccount.google.com/apppasswords), crée un mot de passe (par exemple « Philibert »).
+3. Copie `.env.example` vers `.env` et remplis les valeurs (le script charge `.env` automatiquement) :
 
 ```bash
-python watch_irving_prizm.py --once
+cp .env.example .env
 ```
 
-Le premier passage affiche les annonces déjà en ligne qui passent le filtre, puis les enregistre. Les passages suivants ne signalent que les **nouvelles** mises en ligne.
+```
+GMAIL_ADDRESS=ton.adresse@gmail.com
+GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
+# MAIL_TO=autre.adresse@gmail.com   # optionnel, par défaut = GMAIL_ADDRESS
+```
+
+Ne commite jamais le fichier `.env`. Le mot de passe d'application peut être collé avec ou sans espaces.
+
+Vérifier l'envoi :
+
+```bash
+python3 watch_philibert.py --test-email
+```
+
+### Lancer une fois (test, sans e-mail de baseline)
+
+```bash
+python3 watch_philibert.py --once --dry-run
+```
+
+Le premier passage liste les articles trouvés, enregistre la baseline dans `seen_products.json`, et n'envoie pas d'e-mail. Les passages suivants n'envoient un mail que pour les **nouveaux** articles achetables, ou pour un article connu qui redevient achetable.
 
 Options utiles :
 
 ```bash
-# Prix maximum en euros, domaine et intervalle
-python watch_irving_prizm.py --once --max-price 250 --domain vinted.fr
+# Un passage, et alerte aussi pour les articles déjà achetables
+python3 watch_philibert.py --once --alert-on-first-run
 
-# Requêtes et mots-clés personnalisés
-python watch_irving_prizm.py --once \
-  --query "kyrie irving prizm" --query "irving prizm 2012" \
-  --name-keywords kyrie,irving --set-keywords prizm,prism
+# Intervalle personnalisé (secondes) et autre requête
+python3 watch_philibert.py --interval 120 --query "pokémon 30 ans"
 
-# Afficher aussi les annonces déjà vues
-python watch_irving_prizm.py --once --show-all
+# Fichier d'état ailleurs
+python3 watch_philibert.py --once --state-file /tmp/seen_products.json
 ```
 
-### Tourner en continu (toutes les 10 minutes)
+### Tourner en continu
 
 ```bash
-python watch_irving_prizm.py
+python3 watch_philibert.py
 # ou :
-python watch_irving_prizm.py --interval 10
+python3 watch_philibert.py --interval 90
 ```
 
-En arrière-plan avec les logs dans un fichier :
+En arrière-plan, avec les logs dans un fichier :
 
 ```bash
-nohup python watch_irving_prizm.py --interval 10 >> watch.log 2>&1 &
+nohup python3 watch_philibert.py --interval 90 >> watch.log 2>&1 &
 ```
 
 Avec `tmux` ou `screen` :
 
 ```bash
-tmux new -s vinted-irving
-python watch_irving_prizm.py
+tmux new -s philibert
+python3 watch_philibert.py
 # détacher : Ctrl+B puis D
 ```
 
-### Cron (un passage toutes les 10 minutes)
+### Cron (un passage à intervalle fixe)
 
-Le script gère déjà la boucle interne ; un cron n'est utile que si tu préfères un processus court (`--once`) :
+Le script gère déjà la boucle interne, avec jitter et backoff. Un cron n'est utile que si tu préfères un processus court (`--once`) :
 
 ```cron
-*/10 * * * * cd /chemin/vers/vinted-nba && .venv/bin/python watch_irving_prizm.py --once >> watch.log 2>&1
+* * * * * cd /chemin/vers/vinted-nba && python3 watch_philibert.py --once >> watch.log 2>&1
 ```
 
-Dans ce mode, laisse `seen_items.json` au même endroit (ou passe `--seen-file`) pour ne pas re-signaler les anciennes annonces à chaque exécution.
-
-### Notifications (optionnelles)
-
-Aucune clé n'est stockée dans le code. Exporte simplement les variables, ou copie `.env.example` vers `.env` et source-le.
-
-**ntfy.sh**
-
-```bash
-export NTFY_TOPIC="mon-topic-secret"
-# ou une URL complète (serveur auto-hébergé) :
-# export NTFY_URL="https://ntfy.exemple.org/mon-topic"
-python watch_irving_prizm.py
-```
-
-**Telegram**
-
-```bash
-export TELEGRAM_BOT_TOKEN="..."
-export TELEGRAM_CHAT_ID="..."
-python watch_irving_prizm.py
-```
+Dans ce mode, laisse `seen_products.json` au même endroit (ou passe `--state-file`) pour ne pas re-signaler les anciens articles. Un cron à la minute est un peu plus fréquent que le défaut de 90 s : reste raisonnable, n'ajoute pas plusieurs crons en parallèle.
 
 ### Limites
 
-- L'endpoint utilisé est l'API interne du site web Vinted, non documentée : un changement côté Vinted peut casser le script.
-- En cas d'erreur réseau, de HTTP 429 ou de session expirée, le script attend (backoff) puis recommence. En mode boucle, il ne s'arrête pas pour autant.
-- Un rythme trop agressif peut entraîner un blocage (Cloudflare / DataDome). L'intervalle de 10 minutes et quelques requêtes par passage restent raisonnables ; n'abrège pas trop l'intervalle.
-- La recherche Vinted est large : le filtre sur le titre est indispensable. Une annonce mal titrée (sans « Irving », « Prizm » ou indice rookie) peut passer inaperçue. Tu peux assouplir avec `--no-require-rookie`.
+- Les pages HTML de philibertnet.com sont protégées par Akamai Bot Manager (souvent un 403 depuis un serveur). Le script n'en a pas besoin : il parle à l'API de recherche Doofinder (`eu1-search.doofinder.com`) avec les en-têtes `Origin` / `Referer` du site. Si Philibert change de moteur ou d'identifiant (`hashid`), la recherche devra être mise à jour.
+- L'index Doofinder peut avoir un léger décalage par rapport à la fiche produit.
+- En cas d'erreur réseau ou HTTP, le script double l'attente (backoff, plafonné) puis réessaie. En mode boucle, il ne s'arrête pas pour autant.
+- L'intervalle par défaut de 90 secondes, avec un jitter de ±20 %, vise un bon compromis entre réactivité et charge. Le minimum accepté est de 30 secondes.
