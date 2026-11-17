@@ -49,7 +49,7 @@ DEFAULT_HASHID = "b220561599a93dfc2d82f89bf6223e54"
 DEFAULT_ZONE = "eu1"
 DEFAULT_QUERY = "pokémon 30 ans"
 DEFAULT_QUERY_NAME = "match_and"
-DEFAULT_INTERVAL = 60  # secondes — voir README
+DEFAULT_INTERVAL = 120  # secondes — voir README
 MIN_INTERVAL = 30
 DEFAULT_RPP = 100
 DEFAULT_STATE_FILE = "seen_products.json"
@@ -500,7 +500,34 @@ def send_github_dispatch(subject: str, body: str, body_html: str | None = None) 
     )
 
 
+def send_telegram(subject: str, body: str) -> bool:
+    """Envoie un message Telegram si TELEGRAM_BOT_TOKEN et TELEGRAM_CHAT_ID sont définis.
+
+    Renvoie True si le message est parti. Une erreur est journalisée sans bloquer l'e-mail.
+    """
+    token = (os.environ.get("TELEGRAM_BOT_TOKEN") or "").strip()
+    chat_id = (os.environ.get("TELEGRAM_CHAT_ID") or "").strip()
+    if not token or not chat_id:
+        return False
+    text = f"{subject}\n\n{body}"[:4000]
+    data = urllib.parse.urlencode(
+        {"chat_id": chat_id, "text": text, "disable_web_page_preview": "false"}
+    ).encode()
+    try:
+        with urllib.request.urlopen(
+            f"https://api.telegram.org/bot{token}/sendMessage", data=data, timeout=20
+        ) as resp:
+            ok = json.load(resp).get("ok", False)
+        logger.info("Message Telegram %s.", "envoyé" if ok else "refusé")
+        return bool(ok)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Échec de l'envoi Telegram : %s", type(exc).__name__)
+        return False
+
+
 def send_alert(subject: str, body: str, body_html: str | None = None) -> None:
+    # Telegram d'abord : c'est le canal le plus rapide.
+    send_telegram(subject, body)
     notifier = resolve_notifier()
     logger.info("Envoi de l'alerte via %s.", notifier)
     if notifier == "github":

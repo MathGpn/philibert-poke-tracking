@@ -4,7 +4,7 @@ Surveillance simple de Philibert pour les articles **Pokémon 30 ans**.
 
 ## Surveillance Philibert — Pokémon 30 ans
 
-`watch_philibert.py` interroge, le plus souvent possible (toutes les **60 secondes** par défaut), la recherche équivalente à la page :
+`watch_philibert.py` interroge, le plus souvent possible (toutes les **2 minutes** par défaut), la recherche équivalente à la page :
 
 [Pokémon 30 ans sur Philibert](https://www.philibertnet.com/fr/212-pokemon#e210/mobile/m=and&q=pok%C3%A9mon+30+ans)
 
@@ -116,7 +116,7 @@ python3 watch_philibert.py --once --state-file /tmp/seen_products.json
 ```bash
 python3 watch_philibert.py
 # ou :
-python3 watch_philibert.py --interval 60
+python3 watch_philibert.py --interval 120
 ```
 
 En arrière-plan, avec les logs dans un fichier (exemple en mode GitHub) :
@@ -124,7 +124,7 @@ En arrière-plan, avec les logs dans un fichier (exemple en mode GitHub) :
 ```bash
 export NOTIFY=github
 export GH_TOKEN="$(gh auth token)"
-nohup python3 -u watch_philibert.py --interval 60 >> watch.log 2>&1 &
+nohup python3 -u watch_philibert.py --interval 120 >> watch.log 2>&1 &
 ```
 
 Avec `tmux` ou `screen` :
@@ -143,12 +143,23 @@ Le script gère déjà la boucle interne, avec jitter et backoff. Un cron n'est 
 * * * * * cd /chemin/vers/philibert-poke-tracking && python3 watch_philibert.py --once >> watch.log 2>&1
 ```
 
-Dans ce mode, laisse `seen_products.json` au même endroit (ou passe `--state-file`) pour ne pas re-signaler les anciens articles. Un cron à la minute correspond au défaut de 60 s : reste raisonnable, n'ajoute pas plusieurs crons en parallèle.
+Dans ce mode, laisse `seen_products.json` au même endroit (ou passe `--state-file`) pour ne pas re-signaler les anciens articles. Un cron toutes les 2 minutes correspond au défaut de 120 s : reste raisonnable, n'ajoute pas plusieurs crons en parallèle.
 
 ### Limites
 
 - Les pages HTML de philibertnet.com sont protégées par Akamai Bot Manager (souvent un 403 depuis un serveur). Le script n'en a pas besoin : il parle à l'API de recherche Doofinder (`eu1-search.doofinder.com`) avec les en-têtes `Origin` / `Referer` du site. Si Philibert change de moteur ou d'identifiant (`hashid`), la recherche devra être mise à jour.
 - L'index Doofinder peut avoir un léger décalage par rapport à la fiche produit.
 - En cas d'erreur réseau ou HTTP, le script double l'attente (backoff, plafonné) puis réessaie. En mode boucle, il ne s'arrête pas pour autant.
-- L'intervalle par défaut de 60 secondes, avec un jitter de ±20 %, vise un bon compromis entre réactivité et charge. Le minimum accepté est de 30 secondes.
+- L'intervalle par défaut de 120 secondes, avec un jitter de ±20 %, vise un bon compromis entre réactivité et charge. Le minimum accepté est de 30 secondes.
 - Le mode `github` exige que le workflow soit présent sur `main` (`repository_dispatch` ne s'exécute que sur la branche par défaut) et que les secrets Gmail du dépôt soient renseignés.
+
+## Alerte Telegram (instantanée)
+
+En plus de l'e-mail, le script peut envoyer un message Telegram, bien plus rapide. Il suffit de définir :
+
+```bash
+export TELEGRAM_BOT_TOKEN=123456:ABC...   # token donné par @BotFather
+export TELEGRAM_CHAT_ID=123456789        # ton id de conversation avec le bot
+```
+
+Le message Telegram part en premier ; un échec Telegram n'empêche pas l'envoi de l'e-mail.
