@@ -74,9 +74,9 @@ Le workflow ne tourne que depuis la branche par défaut (`main`). Il lit les sec
 - `MAIL_TO`
 
 ```bash
-gh secret set GMAIL_ADDRESS -R MathGpn/vinted-nba
-gh secret set GMAIL_APP_PASSWORD -R MathGpn/vinted-nba
-gh secret set MAIL_TO -R MathGpn/vinted-nba
+gh secret set GMAIL_ADDRESS -R MathGpn/philibert-poke-tracking
+gh secret set GMAIL_APP_PASSWORD -R MathGpn/philibert-poke-tracking
+gh secret set MAIL_TO -R MathGpn/philibert-poke-tracking
 ```
 
 Sur la machine qui surveille, fournis un jeton avec le droit `repo` (par exemple celui de `gh`) :
@@ -84,7 +84,7 @@ Sur la machine qui surveille, fournis un jeton avec le droit `repo` (par exemple
 ```bash
 export NOTIFY=github
 export GH_TOKEN="$(gh auth token)"
-# optionnel : export GITHUB_REPO=MathGpn/vinted-nba
+# optionnel : export GITHUB_REPO=MathGpn/philibert-poke-tracking
 python3 watch_philibert.py --test-email
 ```
 
@@ -140,7 +140,7 @@ python3 watch_philibert.py
 Le script gère déjà la boucle interne, avec jitter et backoff. Un cron n'est utile que si tu préfères un processus court (`--once`) :
 
 ```cron
-* * * * * cd /chemin/vers/vinted-nba && python3 watch_philibert.py --once >> watch.log 2>&1
+* * * * * cd /chemin/vers/philibert-poke-tracking && python3 watch_philibert.py --once >> watch.log 2>&1
 ```
 
 Dans ce mode, laisse `seen_products.json` au même endroit (ou passe `--state-file`) pour ne pas re-signaler les anciens articles. Un cron à la minute est un peu plus fréquent que le défaut de 90 s : reste raisonnable, n'ajoute pas plusieurs crons en parallèle.

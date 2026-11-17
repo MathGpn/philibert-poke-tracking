@@ -57,7 +57,7 @@ PAGE_URL = (
     "https://www.philibertnet.com/fr/212-pokemon"
     "#e210/mobile/m=and&q=pok%C3%A9mon+30+ans"
 )
-DEFAULT_GITHUB_REPO = "MathGpn/vinted-nba"
+DEFAULT_GITHUB_REPO = "MathGpn/philibert-poke-tracking"
 DISPATCH_EVENT = "philibert-alert"
 
 # Disponibilités clairement achetables / non achetables côté index Doofinder.
