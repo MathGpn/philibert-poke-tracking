@@ -21,32 +21,28 @@ L'heure affichée est celle de la détection, fuseau **Europe/Paris**.
 
 ## Mode actuel : GitHub Actions toutes les 5 minutes
 
-La surveillance tourne désormais **sur GitHub Actions**, sans aucune machine à laisser allumée. Le workflow [`.github/workflows/philibert-watch.yml`](.github/workflows/philibert-watch.yml) :
+La surveillance tourne **sur GitHub Actions**, sans aucune machine à laisser allumée. Comme le planificateur `cron` de GitHub n'a jamais déclenché ce workflow de façon fiable, le workflow [`.github/workflows/philibert-watch.yml`](.github/workflows/philibert-watch.yml) **boucle et se relance tout seul** :
 
-- se lance toutes les **5 minutes** (`cron: "*/5 * * * *"`) et peut aussi être lancé à la main depuis l'onglet Actions (`workflow_dispatch`) ;
-- exécute `python3 watch_philibert.py --once` sur un runner `ubuntu-slim` (1 vCPU, le moins cher) ;
-- envoie l'alerte **Telegram** puis l'**e-mail Gmail directement en SMTP** depuis le runner (`NOTIFY=smtp`) ;
-- garde la mémoire des articles déjà vus dans `seen_products.json`, **commité dans le dépôt** : le fichier n'est recommité que si la liste des articles ou leur statut « achetable » change (les simples horodatages ne créent pas de commit) ;
-- utilise un groupe `concurrency` pour que deux passages ne se chevauchent jamais.
+- un run exécute [`scripts/actions_loop.sh`](scripts/actions_loop.sh) sur `ubuntu-latest` (gratuit et illimité pour un dépôt public ; `ubuntu-slim` est limité à 15 minutes par job) ;
+- la boucle lance `python3 watch_philibert.py --once` **toutes les 5 minutes** pendant environ **5 h 35**, puis s'arrête (GitHub coupe un job au bout de 6 h) ;
+- à chaque tour : alerte **Telegram** puis **e-mail Gmail en SMTP** (`NOTIFY=smtp`) si un nouvel article est achetable, et `seen_products.json` est recommité seulement si la liste des articles ou leur statut « achetable » change ;
+- un tour en échec (Philibert ou Gmail injoignable) est signalé par un avertissement mais **n'arrête pas la boucle** ; l'état n'est pas enregistré et l'alerte est retentée au tour suivant ;
+- à la fin (ou si la boucle plante), la dernière étape relance un nouveau run avec `gh workflow run` et le `GITHUB_TOKEN` (GitHub autorise ce cas pour `workflow_dispatch`) ;
+- le `cron` toutes les 5 minutes reste en filet de sécurité ; le groupe `concurrency` garantit au plus un run actif et un run en attente.
 
 Secrets du dépôt utilisés (Settings → Secrets and variables → Actions) :
 
 - `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD`, `MAIL_TO`
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
 
-Lancer un passage à la main :
+**Relancer à la main** si la chaîne s'est arrêtée : onglet **Actions** → « Surveillance Philibert » → **Run workflow** → branche `main`. Ou en ligne de commande :
 
 ```bash
 gh workflow run philibert-watch.yml -R MathGpn/philibert-poke-tracking
 gh run list --workflow philibert-watch.yml -R MathGpn/philibert-poke-tracking
 ```
 
-À savoir :
-
-- GitHub ne garantit pas l'horaire des tâches planifiées : un passage peut partir avec quelques minutes de retard, voire être sauté quand GitHub est très chargé.
-- Dans un dépôt **public**, GitHub désactive les tâches planifiées après 60 jours sans activité sur le dépôt. Ce dépôt étant **privé**, cette règle ne s'applique pas.
-- Dans un dépôt privé, chaque passage consomme au moins 1 minute facturée sur le quota gratuit Actions du compte (environ 8 600 passages par mois à 5 minutes, soit environ 17 $ au tarif `ubuntu-slim`, à comparer aux 12 $ inclus dans GitHub Free). Dans un dépôt public, les runners standards sont gratuits et illimités.
-- Si un passage échoue (Philibert ou Gmail injoignable), GitHub l'indique dans l'onglet Actions ; l'état n'est pas enregistré et l'alerte sera retentée au passage suivant.
+**Arrêter** la surveillance : annuler le run en cours (« Cancel workflow run ») ; un run annulé à la main ne se relance pas. Pour l'arrêter définitivement, désactiver aussi le workflow (« Disable workflow »), sinon le `cron` peut le relancer.
 
 Le script peut toujours tourner en continu sur une machine (sections ci-dessous), mais il ne faut pas faire tourner les deux en même temps, sous peine d'alertes en double.
 
