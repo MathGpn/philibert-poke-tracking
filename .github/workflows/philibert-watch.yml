@@ -1,0 +1,77 @@
+name: Surveillance Philibert (toutes les 5 min)
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: philibert-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    name: Vérifier Philibert
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Vérifier les nouveaux articles
+        env:
+          NOTIFY: smtp
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PYTHONUNBUFFERED: "1"
+        run: python3 watch_philibert.py --once
+
+      - name: Enregistrer l'état s'il a changé
+        run: |
+          # On ne commite que si la liste des articles ou leur statut d'achat change
+          # (les horodatages last_seen/updated_at seuls ne déclenchent pas de commit).
+          python3 - << 'PY'
+          import json, subprocess, sys
+          def key(text):
+              data = json.loads(text) if text.strip() else {}
+              return sorted(
+                  (pid, bool(p.get("purchasable")))
+                  for pid, p in (data.get("products") or {}).items()
+              )
+          try:
+              old = subprocess.run(["git", "show", "HEAD:seen_products.json"],
+                                   capture_output=True, text=True, check=True).stdout
+          except subprocess.CalledProcessError:
+              old = ""
+          new = open("seen_products.json", encoding="utf-8").read()
+          changed = key(old) != key(new)
+          print("État modifié" if changed else "État inchangé")
+          with open("/tmp/state_changed", "w") as f:
+              f.write("1" if changed else "0")
+          PY
+          if [ "$(cat /tmp/state_changed)" != "1" ]; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp seen_products.json /tmp/seen_products.json
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git reset --hard origin/main
+            cp /tmp/seen_products.json seen_products.json
+            git add seen_products.json
+            git diff --cached --quiet && exit 0
+            git commit -m "Mise à jour de l'état Philibert [skip ci]"
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            sleep $((attempt * 5))
+          done
+          echo "Impossible de pousser l'état" >&2
+          exit 1
