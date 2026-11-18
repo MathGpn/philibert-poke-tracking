@@ -3,7 +3,7 @@ name: Surveillance Philibert (toutes les 5 min)
 on:
   schedule:
     # Toutes les 5 minutes (GitHub peut retarder les lancements planifiés)
-    - cron: "*/5 * * * *"
+    - cron: "3-58/5 * * * *"
   workflow_dispatch:
 
 permissions:
