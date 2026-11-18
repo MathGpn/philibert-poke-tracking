@@ -4,7 +4,7 @@ Surveillance simple de Philibert pour les articles **Pokémon 30 ans**.
 
 ## Surveillance Philibert — Pokémon 30 ans
 
-`watch_philibert.py` interroge, le plus souvent possible (toutes les **2 minutes** par défaut), la recherche équivalente à la page :
+`watch_philibert.py` interroge (toutes les **5 minutes** via GitHub Actions, ou toutes les **2 minutes** par défaut en mode boucle sur une machine), la recherche équivalente à la page :
 
 [Pokémon 30 ans sur Philibert](https://www.philibertnet.com/fr/212-pokemon#e210/mobile/m=and&q=pok%C3%A9mon+30+ans)
 
@@ -13,11 +13,42 @@ Dès qu'un **nouvel article devient disponible à l'achat**, ou qu'un article d�
 Le script :
 
 - passe par l'API de recherche publique Doofinder utilisée par le calque de la page (le fragment `#e210/mobile/m=and&q=…` n'est pas envoyé au serveur : c'est un filtre côté navigateur) ;
-- mémorise les articles déjà vus dans `seen_products.json` ;
+- mémorise les articles déjà vus dans `seen_products.json` (commité dans le dépôt pour le mode GitHub Actions) ;
 - n'envoie **aucune alerte** lors de la première exécution (baseline), sauf si tu passes `--alert-on-first-run` ;
 - traite une précommande **ouverte** (ajout au panier possible) comme achetable, en la labellisant clairement ; une fiche « à venir » encore indisponible est seulement mémorisée.
 
 L'heure affichée est celle de la détection, fuseau **Europe/Paris**.
+
+## Mode actuel : GitHub Actions toutes les 5 minutes
+
+La surveillance tourne désormais **sur GitHub Actions**, sans aucune machine à laisser allumée. Le workflow [`.github/workflows/philibert-watch.yml`](.github/workflows/philibert-watch.yml) :
+
+- se lance toutes les **5 minutes** (`cron: "*/5 * * * *"`) et peut aussi être lancé à la main depuis l'onglet Actions (`workflow_dispatch`) ;
+- exécute `python3 watch_philibert.py --once` sur un runner `ubuntu-slim` (1 vCPU, le moins cher) ;
+- envoie l'alerte **Telegram** puis l'**e-mail Gmail directement en SMTP** depuis le runner (`NOTIFY=smtp`) ;
+- garde la mémoire des articles déjà vus dans `seen_products.json`, **commité dans le dépôt** : le fichier n'est recommité que si la liste des articles ou leur statut « achetable » change (les simples horodatages ne créent pas de commit) ;
+- utilise un groupe `concurrency` pour que deux passages ne se chevauchent jamais.
+
+Secrets du dépôt utilisés (Settings → Secrets and variables → Actions) :
+
+- `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD`, `MAIL_TO`
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
+
+Lancer un passage à la main :
+
+```bash
+gh workflow run philibert-watch.yml -R MathGpn/philibert-poke-tracking
+gh run list --workflow philibert-watch.yml -R MathGpn/philibert-poke-tracking
+```
+
+À savoir :
+
+- GitHub ne garantit pas l'horaire des tâches planifiées : un passage peut partir avec quelques minutes de retard, voire être sauté quand GitHub est très chargé.
+- Dans un dépôt **public**, GitHub désactive les tâches planifiées après 60 jours sans activité sur le dépôt. Ce dépôt étant **privé**, cette règle ne s'applique pas.
+- Dans un dépôt privé, chaque passage consomme au moins 1 minute facturée sur le quota gratuit Actions du compte (environ 8 600 passages par mois à 5 minutes, soit environ 17 $ au tarif `ubuntu-slim`, à comparer aux 12 $ inclus dans GitHub Free). Dans un dépôt public, les runners standards sont gratuits et illimités.
+- Si un passage échoue (Philibert ou Gmail injoignable), GitHub l'indique dans l'onglet Actions ; l'état n'est pas enregistré et l'alerte sera retentée au passage suivant.
+
+Le script peut toujours tourner en continu sur une machine (sections ci-dessous), mais il ne faut pas faire tourner les deux en même temps, sous peine d'alertes en double.
 
 ### Installation
 

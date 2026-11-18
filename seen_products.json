@@ -1,0 +1,78 @@
+{
+  "query": "pokémon 30 ans",
+  "updated_at": "2026-11-18T08:43:07+01:00",
+  "products": {
+    "184034": {
+      "id": "184034",
+      "name": "Pokemon - 30th Celebration - Premium Deck Set Mentali & Noctali",
+      "url": "https://www.philibertnet.com/fr/pokemon/184034-pokemon-30th-celebration-premium-deck-set-mentali-noctali-4521329462189.html",
+      "price": 239.95,
+      "availability": "En stock",
+      "purchasable": true,
+      "preorder": false,
+      "stock_quantity": 4,
+      "first_seen": "2026-11-17T18:14:32+01:00",
+      "last_seen": "2026-11-18T08:43:07+01:00"
+    },
+    "184149": {
+      "id": "184149",
+      "name": "Pokémon - Deck Combat 30 ans – Mentali‑ex",
+      "url": "https://www.philibertnet.com/fr/pokemon/184149-pokemon-deck-combat-30e-anniversaire-mentaliex-2100001427870.html",
+      "price": null,
+      "availability": "Indisponible",
+      "purchasable": false,
+      "preorder": true,
+      "stock_quantity": -16,
+      "first_seen": "2026-11-17T18:14:32+01:00",
+      "last_seen": "2026-11-18T08:43:07+01:00"
+    },
+    "184148": {
+      "id": "184148",
+      "name": "Pokémon - Deck Combat 30 ans – Noctali‑ex",
+      "url": "https://www.philibertnet.com/fr/pokemon/184148-pokemon-deck-combat-30e-anniversaire-noctaliex-2100001427856.html",
+      "price": null,
+      "availability": "Indisponible",
+      "purchasable": false,
+      "preorder": true,
+      "stock_quantity": -16,
+      "first_seen": "2026-11-17T18:14:32+01:00",
+      "last_seen": "2026-11-18T08:43:07+01:00"
+    },
+    "184744": {
+      "id": "184744",
+      "name": "Pokémon 30 ans - Coffret Collection avec Figurine Mewtwo",
+      "url": "https://www.philibertnet.com/fr/pokemon/184744-pokemon-30-ans-coffret-collection-avec-figurine-mewtwo-2100001434496.html",
+      "price": null,
+      "availability": "Indisponible",
+      "purchasable": false,
+      "preorder": true,
+      "stock_quantity": -71,
+      "first_seen": "2026-11-17T18:14:32+01:00",
+      "last_seen": "2026-11-18T08:43:07+01:00"
+    },
+    "185357": {
+      "id": "185357",
+      "name": "Pokémon 30 ans - Tripack - Collection Autocollant Lucario",
+      "url": "https://www.philibertnet.com/fr/pokemon/185357-pokemon-30-ans-tripack-collection-autocollant-lucario-2100001438814.html",
+      "price": null,
+      "availability": "Indisponible",
+      "purchasable": false,
+      "preorder": true,
+      "stock_quantity": 0,
+      "first_seen": "2026-11-17T18:14:32+01:00",
+      "last_seen": "2026-11-18T08:43:07+01:00"
+    },
+    "185360": {
+      "id": "185360",
+      "name": "Pokémon 30 ans - Tripack - Collection Autocollant Noadkoko d’Alola",
+      "url": "https://www.philibertnet.com/fr/pokemon/185360-pokemon-30-ans-tripack-collection-autocollant-noadkoko-dalola-2100001438821.html",
+      "price": null,
+      "availability": "Indisponible",
+      "purchasable": false,
+      "preorder": true,
+      "stock_quantity": 0,
+      "first_seen": "2026-11-17T18:14:32+01:00",
+      "last_seen": "2026-11-18T08:43:07+01:00"
+    }
+  }
+}
