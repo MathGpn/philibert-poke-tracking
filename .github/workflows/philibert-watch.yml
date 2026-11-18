@@ -7,6 +7,11 @@ on:
   schedule:
     - cron: "3-58/5 * * * *"
   workflow_dispatch:
+    inputs:
+      loop_minutes:
+        description: "Durée de la boucle en minutes (335 par défaut, max ~340)"
+        required: false
+        default: "335"
 
 permissions:
   contents: write
@@ -37,7 +42,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           PYTHONUNBUFFERED: "1"
           INTERVAL: "300"
-          LOOP_MINUTES: "335"
+          LOOP_MINUTES: ${{ inputs.loop_minutes || '335' }}
         # Copie dans /tmp : la boucle fait des git reset qui peuvent modifier le fichier.
         run: |
           cp scripts/actions_loop.sh /tmp/actions_loop.sh
